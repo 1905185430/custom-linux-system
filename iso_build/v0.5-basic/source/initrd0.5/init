@@ -1,0 +1,12 @@
+#!/bin/bash
+# v0.5 init script - Basic initrd
+
+echo "Mounting proc and sysfs..."
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+
+echo "v0.5 initrd loaded successfully!"
+echo "Starting interactive shell..."
+
+exec /bin/bash

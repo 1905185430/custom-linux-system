@@ -1,0 +1,194 @@
+# v0.5 基础 Initrd 系统
+
+## 版本信息
+- **版本号**: v0.5
+- **镜像大小**: 4.1MB
+- **发布日期**: 2026-04-03
+
+## 功能特性
+
+### 基础功能
+✅ 基础目录结构 (bin, dev, etc, proc, sys, tmp, root, sbin, lib)  
+✅ Bash/Shell 支持  
+✅ 基础命令工具 (ls, mkdir, cat, mount, ps, echo 等)  
+✅ 动态库依赖自动处理  
+✅ 虚拟文件系统挂载 (proc, sysfs, devtmpfs)
+
+### 包含的命令
+- **文件操作**: ls, mkdir, cp, mv, rm, cat
+- **系统操作**: mount, umount, ps
+- **Shell**: bash, sh, echo
+
+## 使用方法
+
+### 1. 在 VMware 中测试
+
+```bash
+# 复制镜像到 /boot
+sudo cp boot/initrd0.5.img /boot/
+
+# 在 /etc/grub.d/40_custom 中添加：
+menuentry "Custom Linux v0.5" {
+    linux /boot/vmlinuz-$(uname -r) root=/dev/ram0 rw
+    initrd /boot/initrd0.5.img
+}
+
+# 更新 GRUB
+sudo update-grub
+
+# 重启测试
+sudo reboot
+```
+
+### 2. 直接测试 initrd
+
+```bash
+# 解压查看内容
+cd /tmp
+gunzip -c /path/to/initrd0.5.img | cpio -idmv
+
+# 使用 chroot 测试
+sudo chroot /tmp /bin/bash
+```
+
+## 技术细节
+
+### 目录结构
+```
+initrd0.5/
+├── bin/          # 基础命令
+├── dev/          # 设备文件
+├── etc/          # 配置文件
+├── lib/          # 动态库
+├── lib64/        # 64位库链接
+├── proc/         # proc 挂载点
+├── root/         # root 用户目录
+├── sbin/         # 系统命令
+├── sys/          # sysfs 挂载点
+├── tmp/          # 临时文件
+├── usr/          # 用户程序
+├── var/          # 变量数据
+└── init          # 初始化脚本
+```
+
+### Init 脚本内容
+```bash
+#!/bin/bash
+echo "Mounting proc and sysfs..."
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+
+echo "v0.5 initrd loaded successfully!"
+echo "Starting interactive shell..."
+
+exec /bin/bash
+```
+
+### 动态库列表
+- libtinfo.so.6
+- libc.so.6
+- ld-linux-x86-64.so.2
+- libselinux.so.1
+- libpcre2-8.so.0
+- libmount.so.1
+- libblkid.so.1
+- libacl.so.1
+- libattr.so.1
+- libprocps.so.8
+- libsystemd.so.0
+- liblzma.so.5
+- libzstd.so.1
+- liblz4.so.1
+- libcap.so.2
+- libgcrypt.so.20
+- libgpg-error.so.0
+
+## 构建过程
+
+### 1. 创建目录结构
+```bash
+mkdir -p initrd0.5/{bin,dev,etc,proc,sys,tmp,root,sbin,lib,lib64,usr/bin,usr/sbin,var/run}
+```
+
+### 2. 复制基础程序
+```bash
+cp /bin/bash /bin/sh initrd0.5/bin/
+cp /bin/ls /bin/mkdir /bin/cat /bin/mount /bin/umount initrd0.5/bin/
+cp /bin/cp /bin/mv /bin/rm /bin/ps /bin/echo initrd0.5/bin/
+```
+
+### 3. 处理依赖库
+```bash
+ldd /bin/bash | grep -o '/lib[^[:space:]]*' | xargs -I{} cp {} initrd0.5/lib/
+# 对所有命令重复上述操作
+```
+
+### 4. 创建 init 脚本
+```bash
+cat > initrd0.5/init << 'EOF'
+#!/bin/bash
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+exec /bin/bash
+EOF
+chmod +x initrd0.5/init
+```
+
+### 5. 打包镜像
+```bash
+cd initrd0.5
+find . -print0 | cpio --null -ov --format=newc | gzip -9 > ../initrd0.5.img
+```
+
+## 启动流程
+
+1. **BIOS/UEFI** → 加载引导程序 (GRUB)
+2. **GRUB** → 加载 Linux 内核 + initrd
+3. **内核** → 解压 initrd 到内存
+4. **内核** → 执行 /init 脚本
+5. **init** → 挂载虚拟文件系统
+6. **init** → 启动交互式 shell
+
+## 适用场景
+
+- ✅ 学习 Linux 启动过程
+- ✅ 系统救援和维护
+- ✅ 嵌入式系统原型
+- ✅ 最小化系统测试
+
+## 限制说明
+
+- ❌ 无硬件自动检测（需手动加载驱动）
+- ❌ 无网络支持
+- ❌ 无用户认证
+- ❌ 无 systemd 服务管理
+- ❌ 完全运行在内存中，数据不持久
+
+## 下一步升级
+
+升级到 **v0.6** 获得以下功能：
+- udev 硬件自动检测
+- 自动加载驱动模块
+- SCSI/ATA/VirtIO 支持
+
+## 文件清单
+
+```
+v0.5-basic/
+├── boot/
+│   └── initrd0.5.img      # 启动镜像 (4.1MB)
+├── source/
+│   └── initrd0.5/         # 完整源码目录
+└── 使用说明.txt           # 本文件
+```
+
+## 技术支持
+
+如有问题，请参考：
+- 完整教程: VMware Linux 系统构建教程.md
+- 项目主页: https://github.com/yourusername/linux-initrd-builder
+
+---
+**警告**: 本系统仅供学习和研究使用，请勿用于生产环境。

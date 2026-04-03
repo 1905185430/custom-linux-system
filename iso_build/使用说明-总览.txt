@@ -1,0 +1,280 @@
+# Custom Linux 系统 ISO 镜像包
+
+## 版本信息
+- **项目**: Linux Initrd 系统构建
+- **版本**: v0.5 - v1.0
+- **发布日期**: 2026-04-03
+- **适用环境**: VMware 虚拟机 / 物理机
+
+## 目录结构
+
+```
+iso_build/
+├── v0.5-basic/              # 基础版本
+│   ├── boot/
+│   │   └── initrd0.5.img   # 4.1MB
+│   ├── source/
+│   │   └── initrd0.5/      # 完整源码
+│   └── 使用说明.txt
+│
+├── v0.6-udev/               # udev 硬件支持版
+│   ├── boot/
+│   │   └── initrd0.6.img   # 45MB
+│   ├── source/
+│   │   └── initrd0.6/      # 完整源码
+│   └── 使用说明.txt
+│
+├── v0.7-systemd/            # systemd 系统管理版
+│   ├── boot/
+│   │   └── initrd0.7.img   # 47MB
+│   ├── source/
+│   │   └── initrd0.7/      # 完整源码
+│   └── 使用说明.txt
+│
+└── v1.0-full/               # 完整系统版
+    ├── boot/
+    │   └── initrd1.0.img   # 48MB
+    ├── source/
+    │   └── initrd1.0/      # 完整源码
+    ├── scripts/
+    │   └── make-usb-boot.sh # USB启动盘制作脚本
+    └── 使用说明.txt
+```
+
+## 版本对比
+
+| 版本 | 大小 | 核心功能 | 适用场景 |
+|------|------|----------|----------|
+| **v0.5** | 4.1MB | 基础 initrd，bash/sh，基础命令 | 学习启动过程，最小化测试 |
+| **v0.6** | 45MB | + udev 硬件检测，自动驱动加载 | 需要硬件支持的环境 |
+| **v0.7** | 47MB | + systemd 服务管理 | 需要服务管理的系统 |
+| **v1.0** | 48MB | + 用户认证 + 网络 + SSH | 完整的可远程管理系统 |
+
+## 快速开始
+
+### 1. 选择合适的版本
+
+- **初学者**: 从 v0.5 开始，了解最基础的 Linux 启动
+- **需要硬件支持**: 使用 v0.6，自动检测 VMware 硬件
+- **学习 systemd**: 使用 v0.7，体验现代 Linux 初始化
+- **完整体验**: 使用 v1.0，获得功能完整的系统
+
+### 2. VMware 测试方法
+
+```bash
+# 1. 进入对应版本目录
+cd v1.0-full  # 或其他版本
+
+# 2. 复制镜像到虚拟机
+sudo cp boot/initrd1.0.img /boot/
+
+# 3. 添加 GRUB 启动项
+sudo tee -a /etc/grub.d/40_custom << 'EOF'
+menuentry "Custom Linux v1.0" {
+    linux /boot/vmlinuz-$(uname -r) root=/dev/ram0 rw
+    initrd /boot/initrd1.0.img
+}
+EOF
+
+# 4. 更新 GRUB
+sudo update-grub
+
+# 5. 重启测试
+sudo reboot
+```
+
+### 3. 制作 USB 启动盘 (v1.0)
+
+```bash
+# 使用提供的脚本
+cd v1.0-full
+sudo ./scripts/make-usb-boot.sh /dev/sdb  # 替换为你的USB设备
+
+# 或使用手动方法
+# 详见 v1.0-full/使用说明.txt
+```
+
+## 各版本详细说明
+
+### v0.5 - 基础 Initrd
+
+**包含内容**:
+- 基础目录结构
+- bash/sh shell
+- 15+ 基础命令
+- 动态库依赖
+- 虚拟文件系统挂载
+
+**启动后**: 直接进入 bash shell
+
+**适合**: 学习 initrd 结构，理解 Linux 启动过程
+
+---
+
+### v0.6 - Udev 硬件支持
+
+**在 v0.5 基础上增加**:
+- systemd-udevd 守护进程
+- udevadm 管理工具
+- udev 规则文件
+- SCSI/ATA/VirtIO 驱动
+- 网络驱动 (50+)
+
+**启动后**: 自动检测硬件，加载驱动
+
+**适合**: 需要磁盘、网卡等硬件支持的测试
+
+---
+
+### v0.7 - Systemd 系统管理
+
+**在 v0.6 基础上增加**:
+- systemd 主程序
+- systemctl 控制工具
+- target 运行目标
+- 服务依赖管理
+- 并行启动
+
+**启动后**: systemd 接管系统，支持服务管理
+
+**适合**: 学习 systemd，服务管理测试
+
+---
+
+### v1.0 - 完整系统
+
+**在 v0.7 基础上增加**:
+- 用户认证系统 (PAM)
+- /etc/passwd, /etc/shadow
+- 网络配置服务
+- SSH 服务端
+- 静态 IP (192.168.1.100)
+
+**启动后**: 
+- 完整的登录系统
+- 网络自动配置
+- SSH 远程访问
+
+**适合**: 系统救援，远程管理，完整体验
+
+## 网络配置 (v1.0)
+
+```
+IP 地址: 192.168.1.100/24
+网关: 192.168.1.1
+DNS: 自动
+
+SSH 登录: ssh root@192.168.1.100
+密码: 空（直接回车）
+```
+
+## 技术要点
+
+### 1. Initrd 打包
+
+```bash
+cd initrd1.0
+find . -print0 | cpio --null -ov --format=newc | gzip -9 > ../initrd1.0.img
+```
+
+### 2. 动态库处理
+
+```bash
+ldd /bin/bash | grep -o '/lib[^[:space:]]*' | xargs -I{} cp {} initrd1.0/lib/
+```
+
+### 3. 启动流程
+
+```
+BIOS → GRUB → Kernel → Initrd → /init → udev → systemd → Services
+```
+
+## 故障排除
+
+### 无法启动
+- 检查内核版本是否匹配
+- 检查 GRUB 配置
+- 查看 dmesg 日志
+
+### 网络不通 (v1.0)
+- 检查网卡名称 (eth0/ens33)
+- 手动配置 IP
+- 检查 VMware 网络设置
+
+### SSH 无法连接 (v1.0)
+- 检查 SSH 服务状态: `systemctl status ssh`
+- 检查防火墙
+- 检查密钥权限
+
+## 自定义修改
+
+### 修改网络配置
+
+编辑 `v1.0-full/source/initrd1.0/etc/systemd/system/network.service`:
+
+```ini
+ExecStart=/bin/sh -c 'ip addr replace YOUR_IP/24 dev eth0; ip link set eth0 up; ip route add default via YOUR_GATEWAY'
+```
+
+然后重新打包:
+```bash
+cd v1.0-full/source/initrd1.0
+find . -print0 | cpio --null -ov --format=newc | gzip -9 > ../../boot/initrd1.0.img
+```
+
+### 添加自定义服务
+
+1. 创建服务文件
+2. 放入 `etc/systemd/system/`
+3. 启用服务链接
+4. 重新打包
+
+## 安全提示
+
+1. **默认 root 无密码** - 生产环境请设置密码
+2. **SSH 允许 root 登录** - 生产环境建议禁用
+3. **静态 IP** - 根据网络环境修改
+4. **USB 启动盘** - 会清空设备数据，请确认
+
+## 学习路径建议
+
+```
+第1步: v0.5
+  └─ 了解 initrd 基础结构
+  
+第2步: v0.6
+  └─ 学习 udev 硬件管理
+  
+第3步: v0.7
+  └─ 掌握 systemd 服务管理
+  
+第4步: v1.0
+  └─ 整合完整系统
+  
+第5步: 自定义
+  └─ 修改配置，添加功能
+```
+
+## 资源链接
+
+- **完整教程**: VMware Linux 系统构建教程.md
+- **项目文档**: README.md
+- **版本说明**: 各目录下的 使用说明.txt
+
+## 技术支持
+
+如有问题，请查看各版本的详细使用说明：
+- `v0.5-basic/使用说明.txt`
+- `v0.6-udev/使用说明.txt`
+- `v0.7-systemd/使用说明.txt`
+- `v1.0-full/使用说明.txt`
+
+## 许可协议
+
+MIT License
+
+---
+
+**祝您学习愉快！**
+
+如有问题或建议，欢迎反馈。

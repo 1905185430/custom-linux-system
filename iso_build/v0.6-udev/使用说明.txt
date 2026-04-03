@@ -1,0 +1,256 @@
+# v0.6 Udev 硬件支持版
+
+## 版本信息
+- **版本号**: v0.6
+- **镜像大小**: 45MB
+- **发布日期**: 2026-04-03
+- **基于版本**: v0.5
+
+## 功能特性
+
+### 新增功能
+✅ **udev 硬件自动检测** - 自动识别和配置硬件设备  
+✅ **自动驱动加载** - 按需加载内核模块  
+✅ **设备节点管理** - 自动创建 /dev 下的设备文件  
+✅ **硬件驱动支持** - SCSI、ATA、VirtIO、网络驱动
+
+### 包含的驱动模块
+
+#### SCSI 驱动
+- scsi_debug, isci, qla2xxx, arcmsr, vmw_pvscsi
+- hpsa, bfa, snic, fnic, mvumi, ips, libfc
+- smartpqi, mpt3sas, qedf, advansys, megaraid
+- aacraid, csiostor, imm, initio, qla4xxx, esas2r
+
+#### ATA 驱动
+- ahci, ahci_platform, libahci, libahci_platform
+- pata_acpi, pata_ali, pata_amd, pata_artop
+- sata_mv, sata_nv, sata_promise, sata_sil
+- 等 50+ ATA/SATA 驱动
+
+#### VirtIO 驱动
+- virtio_input, virtio_mem, virtio_dma_buf, virtio_vdpa
+
+#### 网络驱动
+- 以太网驱动 (e1000, e1000e, igb, ixgbe 等)
+- 无线网卡驱动 (ath, iwlwifi, rtlwifi 等)
+- USB 网卡驱动 (asix, r8152, rtl8150 等)
+- 虚拟网卡驱动 (vmxnet3, virtio_net 等)
+
+## 使用方法
+
+### 1. VMware 虚拟机测试
+
+```bash
+# 复制镜像
+sudo cp boot/initrd0.6.img /boot/
+
+# 添加到 GRUB 菜单 (/etc/grub.d/40_custom)
+menuentry "Custom Linux v0.6 (with udev)" {
+    linux /boot/vmlinuz-$(uname -r) root=/dev/ram0 rw
+    initrd /boot/initrd0.6.img
+}
+
+sudo update-grub
+sudo reboot
+```
+
+### 2. 查看硬件检测日志
+
+启动后可以看到 udev 的硬件检测过程：
+```
+[v0.6] Mounting virtual filesystems...
+[v0.6] Starting udev daemon...
+[v0.6] Hardware drivers loaded!
+Starting interactive shell...
+```
+
+### 3. 手动测试 udev
+
+```bash
+# 查看已加载的模块
+lsmod
+
+# 查看设备节点
+ls -la /dev/
+
+# 手动触发设备检测
+udevadm trigger --action=add
+udevadm settle
+
+# 查看 udev 日志
+udevadm monitor
+```
+
+## 技术细节
+
+### Init 脚本
+```bash
+#!/bin/bash
+# v0.6 init script - With udev support
+
+echo "[v0.6] Mounting virtual filesystems..."
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+mount -t tmpfs tmpfs /run
+
+echo "[v0.6] Starting udev daemon..."
+/lib/systemd/systemd-udevd --daemon
+/bin/udevadm trigger --action=add
+/bin/udevadm settle
+
+echo "[v0.6] Hardware drivers loaded!"
+exec /bin/bash
+```
+
+### udev 工作流程
+
+1. **systemd-udevd** 启动守护进程
+2. **udevadm trigger** 扫描系统总线
+3. **modprobe** 自动加载匹配的驱动模块
+4. **udev** 创建设备节点 (/dev/sda, /dev/eth0 等)
+5. **udevadm settle** 等待所有设备初始化完成
+
+### 关键组件
+
+| 组件 | 路径 | 功能 |
+|------|------|------|
+| systemd-udevd | /lib/systemd/systemd-udevd | udev 守护进程 |
+| udevadm | /bin/udevadm | udev 管理工具 |
+| udev 规则 | /lib/udev/rules.d/ | 设备处理规则 |
+| kmod | /bin/kmod | 模块管理工具 |
+
+## 构建过程
+
+### 1. 复制 v0.5 基础
+```bash
+cp -r initrd0.5 initrd0.6
+```
+
+### 2. 添加 udev 工具
+```bash
+mkdir -p initrd0.6/{lib/systemd,lib/udev,etc/udev/rules.d,run}
+cp /lib/systemd/systemd-udevd initrd0.6/lib/systemd/
+cp /bin/udevadm initrd0.6/bin/
+```
+
+### 3. 复制依赖库
+```bash
+ldd /lib/systemd/systemd-udevd | grep -o '/lib[^[:space:]]*' | xargs -I{} cp {} initrd0.6/lib/
+ldd /bin/udevadm | grep -o '/lib[^[:space:]]*' | xargs -I{} cp {} initrd0.6/lib/
+```
+
+### 4. 复制 udev 规则
+```bash
+cp -r /lib/udev/rules.d/* initrd0.6/lib/udev/rules.d/
+```
+
+### 5. 添加驱动模块
+```bash
+mkdir -p initrd0.6/lib/modules/$(uname -r)/kernel/drivers
+cp -r /lib/modules/$(uname -r)/kernel/drivers/{scsi,ata,virtio,net} \
+  initrd0.6/lib/modules/$(uname -r)/kernel/drivers/
+```
+
+### 6. 更新 init 脚本
+添加 udev 启动命令（见上文）
+
+### 7. 打包
+```bash
+cd initrd0.6
+find . -print0 | cpio --null -ov --format=newc | gzip -9 > ../initrd0.6.img
+```
+
+## 新增依赖库
+
+- libkmod.so.2 - 内核模块管理
+- libcrypto.so.3 - 加密库
+- libcap.so.2 - 能力管理
+- libblkid.so.1 - 块设备识别
+- libacl.so.1 - 访问控制列表
+
+## 适用场景
+
+- ✅ 需要硬件自动检测的系统
+- ✅ 磁盘控制器识别
+- ✅ 网卡自动配置
+- ✅ USB 设备热插拔
+- ✅ 虚拟化环境（VMware/KVM）
+
+## 与 v0.5 对比
+
+| 功能 | v0.5 | v0.6 |
+|------|------|------|
+| 基础命令 | ✅ | ✅ |
+| 硬件检测 | ❌ | ✅ |
+| 驱动加载 | 手动 | 自动 |
+| 设备节点 | 静态 | 动态 |
+| 镜像大小 | 4.1MB | 45MB |
+
+## 故障排除
+
+### 问题：udev 无法启动
+```bash
+# 检查依赖库
+ldd /lib/systemd/systemd-udevd
+
+# 检查规则文件
+ls -la /lib/udev/rules.d/
+
+# 手动运行调试模式
+/lib/systemd/systemd-udevd --debug
+```
+
+### 问题：驱动无法加载
+```bash
+# 检查模块是否存在
+find /lib/modules -name "*.ko" | grep <driver_name>
+
+# 手动加载测试
+modprobe <driver_name>
+
+# 查看内核日志
+dmesg | tail
+```
+
+### 问题：设备节点未创建
+```bash
+# 检查 devtmpfs 是否挂载
+mount | grep devtmpfs
+
+# 手动创建设备节点
+mknod /dev/sda b 8 0
+```
+
+## 下一步升级
+
+升级到 **v0.7** 获得以下功能：
+- systemd 系统管理
+- 服务单元控制
+- 并行启动
+- 日志管理
+
+## 文件清单
+
+```
+v0.6-udev/
+├── boot/
+│   └── initrd0.6.img          # 启动镜像 (45MB)
+├── source/
+│   └── initrd0.6/             # 完整源码目录
+│       ├── bin/
+│       ├── lib/systemd/
+│       ├── lib/udev/
+│       └── lib/modules/       # 驱动模块
+└── 使用说明.txt               # 本文件
+```
+
+## 参考资料
+
+- udev 文档: https://www.freedesktop.org/software/systemd/man/udev.html
+- Linux 设备驱动: https://static.lwn.net/images/pdf/LDD3/ch14.pdf
+- 内核模块编程: https://www.kernel.org/doc/Documentation/kbuild/modules.txt
+
+---
+**版本历史**: v0.5 → **v0.6** → v0.7 → v1.0

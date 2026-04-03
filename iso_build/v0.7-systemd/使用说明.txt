@@ -1,0 +1,391 @@
+# v0.7 Systemd 系统管理版
+
+## 版本信息
+- **版本号**: v0.7
+- **镜像大小**: 47MB
+- **发布日期**: 2026-04-03
+- **基于版本**: v0.6
+
+## 功能特性
+
+### 新增功能
+✅ **systemd 系统管理** - 现代 Linux 初始化系统  
+✅ **服务单元管理** - 使用 systemctl 控制服务  
+✅ **并行启动** - 加速系统启动过程  
+✅ **依赖管理** - 服务间依赖自动处理  
+✅ **目标系统** - 支持 multi-user.target 等运行级别
+
+### Systemd 组件
+
+| 组件 | 路径 | 说明 |
+|------|------|------|
+| systemd | /lib/systemd/systemd | 主程序 |
+| systemctl | /bin/systemctl | 服务控制工具 |
+| systemd-udevd | /lib/systemd/systemd-udevd | udev 守护进程 |
+| target 文件 | /lib/systemd/system/*.target | 运行目标 |
+
+### 包含的 Target
+
+- `basic.target` - 基础系统
+- `sysinit.target` - 系统初始化
+- `local-fs.target` - 本地文件系统
+- `multi-user.target` - 多用户模式
+- `graphical.target` - 图形界面（预留）
+
+## 使用方法
+
+### 1. VMware 虚拟机测试
+
+```bash
+# 复制镜像
+sudo cp boot/initrd0.7.img /boot/
+
+# 添加到 GRUB 菜单 (/etc/grub.d/40_custom)
+menuentry "Custom Linux v0.7 (with systemd)" {
+    linux /boot/vmlinuz-$(uname -r) root=/dev/ram0 rw
+    initrd /boot/initrd0.7.img
+}
+
+sudo update-grub
+sudo reboot
+```
+
+### 2. Systemd 常用命令
+
+```bash
+# 查看系统状态
+systemctl status
+
+# 查看所有服务
+systemctl list-units --type=service
+
+# 查看目标状态
+systemctl list-units --type=target
+
+# 切换到多用户模式
+systemctl isolate multi-user.target
+
+# 查看启动耗时
+systemd-analyze
+systemd-analyze blame
+
+# 查看日志
+journalctl
+journalctl -xe
+```
+
+### 3. 服务管理示例
+
+```bash
+# 创建自定义服务
+cat > /etc/systemd/system/myapp.service << 'EOF'
+[Unit]
+Description=My Application
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/myapp
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# 重新加载配置
+systemctl daemon-reload
+
+# 启动服务
+systemctl start myapp
+
+# 启用开机启动
+systemctl enable myapp
+```
+
+## 技术细节
+
+### Init 脚本
+```bash
+#!/bin/bash
+# v0.7 init script - With systemd support
+
+echo "[v0.7] Mounting virtual filesystems..."
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+mount -t tmpfs tmpfs /run
+mount -t tmpfs tmpfs /tmp
+
+echo "[v0.7] Starting udev daemon..."
+/lib/systemd/systemd-udevd --daemon
+/bin/udevadm trigger --action=add
+/bin/udevadm settle
+
+echo "[v0.7] Hardware drivers loaded!"
+echo "[v0.7] Starting systemd..."
+
+# 创建必要符号链接
+ln -sf /lib/systemd/systemd /sbin/init
+
+# 导出 PATH
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+
+# 启动 systemd
+exec /lib/systemd/systemd
+```
+
+### Systemd 启动流程
+
+```
+kernel → initrd → /init → systemd
+                              ↓
+                    basic.target
+                              ↓
+                    sysinit.target
+                              ↓
+                    local-fs.target
+                              ↓
+                    multi-user.target
+                              ↓
+                         登录提示
+```
+
+### 关键依赖库
+
+- **libsystemd-shared-249.so** - systemd 共享库
+- **libpam.so.0** - PAM 认证库
+- **libseccomp.so.2** - 安全计算模式
+- **libaudit.so.1** - 审计库
+- **libapparmor.so.1** - AppArmor 安全
+- **libip4tc.so.2** - iptables 控制
+- **libcrypt.so.1** - 密码加密
+
+## 构建过程
+
+### 1. 复制 v0.6 基础
+```bash
+cp -r initrd0.6 initrd0.7
+```
+
+### 2. 创建 systemd 目录
+```bash
+mkdir -p initrd0.7/{etc/systemd/system,lib/systemd/system,usr/lib/systemd,run/systemd}
+```
+
+### 3. 添加 systemd 程序
+```bash
+cp /lib/systemd/systemd initrd0.7/lib/systemd/
+cp /bin/systemctl initrd0.7/bin/
+```
+
+### 4. 复制依赖库
+```bash
+ldd /lib/systemd/systemd | grep -o '/lib[^[:space:]]*' | xargs -I{} cp {} initrd0.7/lib/
+```
+
+### 5. 复制 target 文件
+```bash
+cp /lib/systemd/system/*.target initrd0.7/lib/systemd/system/
+cp /lib/systemd/system/systemd-udevd.service initrd0.7/lib/systemd/system/
+```
+
+### 6. 更新 init 脚本
+将最后的 `exec /bin/bash` 改为 `exec /lib/systemd/systemd`
+
+### 7. 打包
+```bash
+cd initrd0.7
+find . -print0 | cpio --null -ov --format=newc | gzip -9 > ../initrd0.7.img
+```
+
+## 服务单元示例
+
+### 基本服务单元
+```ini
+[Unit]
+Description=Example Service
+Documentation=man:example(8)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/example
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### 定时器单元
+```ini
+[Unit]
+Description=Run example daily
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+### 挂载单元
+```ini
+[Unit]
+Description=Data Partition
+
+[Mount]
+What=/dev/sdb1
+Where=/data
+Type=ext4
+Options=defaults
+
+[Install]
+WantedBy=local-fs.target
+```
+
+## 系统管理
+
+### 查看系统信息
+```bash
+# 系统版本
+systemctl --version
+
+# 主机名
+hostnamectl
+
+# 时间状态
+timedatectl
+
+# 本地化
+localectl
+```
+
+### 电源管理
+```bash
+# 关机
+systemctl poweroff
+
+# 重启
+systemctl reboot
+
+# 挂起
+systemctl suspend
+
+# 休眠
+systemctl hibernate
+```
+
+## 适用场景
+
+- ✅ 需要服务管理的系统
+- ✅ 多服务协调启动
+- ✅ 依赖关系复杂的应用
+- ✅ 需要日志管理的系统
+- ✅ 现代 Linux 系统模拟
+
+## 与 v0.6 对比
+
+| 功能 | v0.6 | v0.7 |
+|------|------|------|
+| 硬件检测 | ✅ | ✅ |
+| udev | ✅ | ✅ |
+| 服务管理 | 手动 | systemd |
+| 并行启动 | ❌ | ✅ |
+| 日志系统 | ❌ | journald |
+| 依赖管理 | ❌ | ✅ |
+| 镜像大小 | 45MB | 47MB |
+
+## 故障排除
+
+### 问题：systemd 无法启动
+```bash
+# 检查依赖库
+ldd /lib/systemd/systemd
+
+# 检查符号链接
+ls -la /sbin/init
+
+# 查看启动日志
+dmesg | grep -i systemd
+```
+
+### 问题：服务启动失败
+```bash
+# 查看服务状态
+systemctl status <service>
+
+# 查看详细日志
+journalctl -u <service>
+
+# 检查配置文件
+systemd-analyze verify /etc/systemd/system/<service>.service
+```
+
+### 问题：启动缓慢
+```bash
+# 分析启动时间
+systemd-analyze
+systemd-analyze blame
+systemd-analyze critical-chain
+
+# 查看启动图表（图形化）
+systemd-analyze plot > boot.svg
+```
+
+## 性能优化
+
+### 减少启动时间
+```bash
+# 禁用不必要的服务
+systemctl disable <service>
+
+# 使用并行启动
+# 在 /etc/systemd/system.conf 中设置:
+[Manager]
+DefaultTimeoutStartSec=10s
+DefaultTimeoutStopSec=10s
+```
+
+### 内存优化
+```bash
+# 清理日志
+journalctl --vacuum-size=100M
+
+# 禁用不需要的 target
+systemctl mask graphical.target
+```
+
+## 下一步升级
+
+升级到 **v0.8** 获得以下功能：
+- 用户登录认证系统
+- PAM 支持
+- /etc/passwd 和 /etc/shadow
+- login 程序
+
+## 文件清单
+
+```
+v0.7-systemd/
+├── boot/
+│   └── initrd0.7.img          # 启动镜像 (47MB)
+├── source/
+│   └── initrd0.7/             # 完整源码目录
+│       ├── bin/systemctl      # 服务控制
+│       ├── lib/systemd/
+│       │   ├── systemd        # 主程序
+│       │   └── system/        # target 文件
+│       └── ...
+└── 使用说明.txt               # 本文件
+```
+
+## 参考资料
+
+- systemd 官方文档: https://systemd.io/
+- systemctl 手册: https://www.freedesktop.org/software/systemd/man/systemctl.html
+- systemd 服务编写: https://www.freedesktop.org/software/systemd/man/systemd.service.html
+
+---
+**版本历史**: v0.5 → v0.6 → **v0.7** → v0.8 → v1.0

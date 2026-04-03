@@ -1,0 +1,18 @@
+#!/bin/bash
+# v0.6 init script - With udev support
+
+echo "[v0.6] Mounting virtual filesystems..."
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+mount -t tmpfs tmpfs /run
+
+echo "[v0.6] Starting udev daemon..."
+/lib/systemd/systemd-udevd --daemon 2>/dev/null
+/bin/udevadm trigger --action=add 2>/dev/null
+/bin/udevadm settle 2>/dev/null
+
+echo "[v0.6] Hardware drivers loaded!"
+echo "Starting interactive shell..."
+
+exec /bin/bash
