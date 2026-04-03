@@ -1,0 +1,26 @@
+#!/bin/bash
+# v0.7 init script - With systemd support
+
+echo "[v0.7] Mounting virtual filesystems..."
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+mount -t tmpfs tmpfs /run
+mount -t tmpfs tmpfs /tmp
+
+echo "[v0.7] Starting udev daemon..."
+/lib/systemd/systemd-udevd --daemon 2>/dev/null
+/bin/udevadm trigger --action=add 2>/dev/null
+/bin/udevadm settle 2>/dev/null
+
+echo "[v0.7] Hardware drivers loaded!"
+echo "[v0.7] Starting systemd..."
+
+# Create necessary symlinks for systemd
+ln -sf /lib/systemd/systemd /sbin/init 2>/dev/null || true
+
+# Export PATH
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+
+# Start systemd
+exec /lib/systemd/systemd
