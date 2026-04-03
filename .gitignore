@@ -1,0 +1,29 @@
+# 排除大文件（超过100MB的ISO镜像）
+Custom-Linux-v1.0-ISO-Collection.iso
+
+# 排除压缩的initrd镜像（可以从源码重新生成）
+*.img
+
+# 排除临时文件
+*.tmp
+*.temp
+*.log
+
+# 排除备份文件
+*~
+*.bak
+*.swp
+*.swo
+
+# 排除IDE配置文件
+.idea/
+.vscode/
+*.iml
+
+# 排除操作系统文件
+.DS_Store
+Thumbs.db
+
+# 排除构建生成的文件
+build/
+dist/
