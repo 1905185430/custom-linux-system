@@ -27,3 +27,4 @@ Thumbs.db
 # 排除构建生成的文件
 build/
 dist/
+*.img
