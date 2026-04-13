@@ -459,3 +459,125 @@ Linux 进程树：
 
 所以 init 脚本用 exec：
     └── 替换当前进程，不创建子进程
+---
+
+## 测试验证
+
+### 启动命令
+
+```bash
+cd ~/linux_class
+qemu-system-x86_64 \
+    -kernel ./vmlinuz-6.8.0-90-generic \
+    -initrd initrd0.7.img \
+    -m 512 \
+    -append "root=/dev/ram0 rw console=ttyS0,115200" \
+    -nographic
+```
+
+### 预期输出
+
+```
+[v0.7] Mounting virtual filesystems...
+[v0.7] Starting udev daemon...
+[v0.7] Hardware drivers loaded!
+[v0.7] Starting systemd...
+[  OK  ] Reached target multi-user.target
+[  OK  ] Started bash.service
+bash-5.1#
+```
+
+### 测试命令
+
+```bash
+# 1. 验证 systemd 是 PID 1
+ps -p 1
+# 应显示 systemd
+
+# 2. 查看 systemd 版本
+systemctl --version
+
+# 3. 查看系统状态
+systemctl status
+
+# 4. 列出所有服务
+systemctl list-units
+
+# 5. 查看 bash 服务状态
+systemctl status bash.service
+
+# 6. 查看当前目标
+systemctl get-default
+```
+
+---
+
+## 故障排查
+
+### 问题 1: systemd 无法启动
+
+**现象**: 卡在 "Starting systemd..."
+
+**排查**:
+```bash
+# 检查 systemd 是否存在
+ls -la /lib/systemd/systemd
+
+# 检查权限
+file /lib/systemd/systemd
+```
+
+### 问题 2: 服务无法启动
+
+**现象**: bash.service 失败
+
+**排查**:
+```bash
+# 查看服务状态
+systemctl status bash.service
+
+# 检查服务文件语法
+systemd-analyze verify /etc/systemd/system/bash.service
+```
+
+### 问题 3: 目标无法达到
+
+**现象**: 无法达到 multi-user.target
+
+**排查**:
+```bash
+# 查看依赖关系
+systemctl list-dependencies multi-user.target
+
+# 查看失败的单元
+systemctl --failed
+```
+
+---
+
+## 总结
+
+### v0.7 关键要点
+
+1. **systemd 作为 PID 1** - 接管系统初始化
+2. **单元（Unit）** - 服务、目标、套接字
+3. **目标（Target）** - 系统状态（multi-user.target）
+4. **服务文件** - .service 配置文件
+5. **systemctl** - 管理服务的命令
+
+### v0.7 vs v0.6
+
+| 特性 | v0.6 | v0.7 |
+|------|------|------|
+| 初始化 | init 脚本 | systemd |
+| 服务管理 | 无 | systemctl |
+| 启动顺序 | 线性 | 并行（依赖管理） |
+| 自动重启 | 无 | 支持 |
+
+### 下一步
+
+继续学习 **v0.8** - 添加用户登录认证！
+
+---
+
+**文档结束**
