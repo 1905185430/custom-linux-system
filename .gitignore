@@ -28,3 +28,8 @@ Thumbs.db
 build/
 dist/
 *.img
+*.img
+initrd*/
+results/
+test_results/
+*.log
